@@ -77,6 +77,24 @@ postgresql-conf:
       - file: postgresql-config-dir
 {% endif %}
 
+{% if postgres.port != 5432 %}
+postgresql-conf-port:
+  file.replace:
+    - name: {{ postgres.conf_dir }}/postgresql.conf
+    - show_changes: True
+    - append_if_not_found: True
+    - pattern: 'port = ([\d+ ]*)'
+    - repl: port = {{ postgres.port }}
+    {% if not postgres.postgresconf_backup|default(True) -%}
+    - backup: False
+    {% endif -%}
+    - watch_in:
+       - service: postgresql-running
+    - require:
+      - file: postgresql-config-dir
+
+{% endif %}
+
 postgresql-pg_hba:
   file.managed:
     - name: {{ postgres.conf_dir }}/pg_hba.conf
@@ -96,6 +114,9 @@ postgresql-user-{{ name }}:
   postgres_user.absent:
     - name: {{ name }}
     - user: {{ user.get('runas', postgres.user) }}
+{% if not postgres.port == 5432 %}
+    - db_port: {{ postgres.port }}
+{% endif %}
 {% else %}
   postgres_user.present:
     - name: {{ name }}
@@ -107,6 +128,9 @@ postgresql-user-{{ name }}:
     - password: {{ user.get('password', 'changethis') }}
     - user: {{ user.get('runas', postgres.user) }}
     - superuser: {{ user.get('superuser', False) }}
+{% if not postgres.port == 5432 %}
+    - db_port: {{ postgres.port }}
+{% endif %}
 {% endif %}
     - require:
       - service: postgresql-running
@@ -138,6 +162,9 @@ postgresql-db-{{ name }}:
 {% if db.get('ensure', 'present') == 'absent' %}
   postgres_database.absent:
     - name: {{ name }}
+{% if not postgres.port == 5432 %}
+    - db_port: {{ postgres.port }}
+{% endif %}
     - require:
       - service: postgresql-running
 {% else %}
@@ -148,6 +175,9 @@ postgresql-db-{{ name }}:
     - lc_collate: {{ db.get('lc_collate', 'en_US.UTF8') }}
     - template: {{ db.get('template', 'template0') }}
     - tablespace: {{ db.get('tablespace', 'pg_default') }}
+{% if not postgres.port == 5432 %}
+    - db_port: {{ postgres.port }}
+{% endif %}
     {% if db.get('owner') %}
     - owner: {{ db.get('owner') }}
     {% endif %}
@@ -181,6 +211,10 @@ postgresql-ext-{{ ext }}-for-db-{{ name }}:
     - name: {{ ext }}
     - user: {{ db.get('runas', postgres.user) }}
     - maintenance_db: {{ name }}
+    - if_not_exists: True
+{% if not postgres.port == 5432 %}
+    - db_port: {{ postgres.port }}
+{% endif %}
 {% if ext_args is not none %}
 {% for arg, value in ext_args.items() %}
     - {{ arg }}: {{ value }}
